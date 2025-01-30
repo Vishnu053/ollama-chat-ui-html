@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Chat Interface</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #1a1a1a;
+            height: 100vh;
+            color: #e1e1e1;
+        }
+        .main-container {
+            height: 100vh;
+            padding: 0;
+        }
+        .sidebar {
+            background-color: #2d2d2d;
+            border-right: 1px solid #404040;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .chat-list {
+            list-style: none;
+            padding: 0;
+        }
+        .chat-list-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #404040;
+            transition: background-color 0.2s;
+            color: #e1e1e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-list-item:hover {
+            background-color: #383838;
+        }
+        .chat-list-item.active {
+            background-color: #404040;
+        }
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #2d2d2d;
+        }
+        .messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: messageAppear 0.3s ease forwards;
+        }
+        @keyframes messageAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .user-message {
+            background-color: #2962ff;
+            margin-left: auto;
+            color: #ffffff;
+        }
+        .assistant-message {
+            background-color: #383838;
+            margin-right: auto;
+            color: #e1e1e1;
+        }
+        .input-container {
+            padding: 20px;
+            background-color: #2d2d2d;
+            border-top: 1px solid #404040;
+        }
+        .settings-modal .modal-body {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 15px;
+            background-color: #e1e1e1;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .new-chat-btn {
+            width: 100%;
+            text-align: left;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            background-color: #2962ff;
+            border: none;
+        }
+        .new-chat-btn:hover {
+            background-color: #2255ee;
+        }
+        .navbar {
+            background-color: #2d2d2d !important;
+            border-bottom: 1px solid #404040;
+        }
+        .navbar-brand {
+            color: #e1e1e1 !important;
+        }
+        .form-control, .form-select {
+            background-color: #383838;
+            border: 1px solid #404040;
+            color: #e1e1e1;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: #383838;
+            border-color: #2962ff;
+            color: #e1e1e1;
+            box-shadow: 0 0 0 0.25rem rgba(41, 98, 255, 0.25);
+        }
+        .form-control::placeholder {
+            color: #888;
+        }
+        .form-control:disabled {
+            background-color: #2d2d2d;
+            color: #888;
+        }
+        .modal-content {
+            background-color: #2d2d2d;
+            border: 1px solid #404040;
+        }
+        .modal-header {
+            border-bottom: 1px solid #404040;
+        }
+        .modal-title {
+            color: #e1e1e1;
+        }
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        .text-muted {
+            color: #888 !important;
+        }
+        .alert-danger {
+            background-color: #442222;
+            border-color: #662222;
+            color: #ff8888;
+        }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
+        .btn-outline-primary {
+            color: #2962ff;
+            border-color: #2962ff;
+        }
+        .btn-outline-primary:hover {
+            background-color: #2962ff;
+            border-color: #2962ff;
+        }
+        .form-range::-webkit-slider-thumb {
+            background: #2962ff;
+        }
+        .form-range::-webkit-slider-runnable-track {
+            background: #404040;
+        }
+        .think-block {
+            margin: 8px 0;
+            padding: 8px 12px;
+            background-color: #333333;
+            border-left: 3px solid #2962ff;
+            border-radius: 4px;
+            font-style: italic;
+            color: #888;
+        }
+        .form-text {
+            color: #888 !important;
+            font-size: 0.875em;
+            margin-top: 0.25rem;
+        }
+        .input-group .btn-outline-primary {
+            border-color: #404040;
+        }
+        .input-group .btn-outline-primary:hover:not(:disabled) {
+            background-color: #2962ff;
+            border-color: #2962ff;
+        }
+        .chat-title {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 8px;
+        }
+        .delete-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+            color: #ff4444;
+            background: none;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .delete-btn:hover {
+            color: #ff6666;
+        }
+        .chat-list-item:hover .delete-btn {
+            opacity: 1;
+        }
+        .markdown {
+            line-height: 1.6;
+        }
+        .markdown code {
+            background: #1e1e1e;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .markdown pre {
+            background: #1e1e1e;
+            padding: 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .markdown pre code {
+            background: transparent;
+            padding: 0;
+        }
+        .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        .markdown blockquote {
+            padding: 0 16px;
+            border-left: 4px solid #2962ff;
+            color: #a0a0a0;
+        }
+        .markdown ul, .markdown ol {
+            padding-left: 2em;
+        }
+        .markdown table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+        }
+        .markdown table th, .markdown table td {
+            border: 1px solid #404040;
+            padding: 6px 13px;
+        }
+        .markdown table tr {
+            background: #2d2d2d;
+        }
+        .markdown table tr:nth-child(2n) {
+            background: #333;
+        }
+        .markdown img {
+            max-width: 100%;
+            height: auto;
+        }
+        .markdown a {
+            color: #2962ff;
+            text-decoration: none;
+        }
+        .markdown a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container-fluid main-container">
+        <div class="row h-100">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar p-0">
+                <button @click="newChat" class="btn btn-primary new-chat-btn">
+                    <i class="bi bi-plus-lg"></i> New Chat
+                </button>
+                <ul class="chat-list">
+                    <li v-for="chat in chatHistory" 
+                        :key="chat.id" 
+                        :class="['chat-list-item', { active: currentChatId === chat.id }]">
+                        <div class="chat-title" @click="loadChat(chat)">
+                            <i class="bi bi-chat-left-text"></i>
+                            {{ chat.title || 'New Chat' }}
+                        </div>
+                        <button class="delete-btn" 
+                                @click.stop="deleteChat(chat.id)" 
+                                title="Delete chat">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Main Chat Area -->
+            <div class="col-md-9 col-lg-10 p-0">
+                <div class="chat-container">
+                    <div class="navbar bg-light px-3">
+                        <span class="navbar-brand">{{ currentChatTitle || 'New Chat' }}</span>
+                        <button class="btn btn-outline-primary" @click="showSettings">
+                            <i class="bi bi-gear"></i> Settings
+                        </button>
+                    </div>
+
+                    <div class="error alert alert-danger" v-if="error">{{ error }}</div>
+                    <div class="messages" ref="messagesContainer">
+                        <div v-for="(message, index) in messages" 
+                             :key="index" 
+                             :class="['message', message.role === 'user' ? 'user-message' : 'assistant-message']">
+                            <div v-if="message.role === 'assistant'" 
+                                 class="markdown" 
+                                 v-html="formatMessage(message.content)">
+                            </div>
+                            <div v-else>{{ message.content }}</div>
+                            <span v-if="isTyping && index === messages.length - 1 && message.role === 'assistant'" 
+                                  class="cursor"></span>
+                        </div>
+                    </div>
+
+                    <div class="input-container">
+                        <div class="input-group">
+                            <textarea 
+                                class="form-control"
+                                v-model="userInput" 
+                                @keyup.enter.exact="sendMessage"
+                                placeholder="Type your message here..."
+                                :disabled="isTyping"
+                                rows="1">
+                            </textarea>
+                            <button class="btn btn-primary" @click="sendMessage" :disabled="isTyping || !userInput.trim()">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal fade" id="settingsModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Chat Settings</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="serverAddress" class="form-label">Ollama Server Address:</label>
+                                <div class="input-group">
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="serverAddress" 
+                                           v-model="serverAddress"
+                                           placeholder="http://127.0.0.1:11434">
+                                    <button class="btn btn-outline-primary" 
+                                            @click="updateServerAddress(serverAddress)"
+                                            :disabled="!serverAddress.trim()">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text text-muted">
+                                    Example: http://127.0.0.1:11434 or http://localhost:11434
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="model" class="form-label">Model:</label>
+                                <select class="form-select" v-model="selectedModel" id="model">
+                                    <option v-for="model in availableModels" :key="model.name" :value="model.name">
+                                        {{ model.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="temperature" class="form-label">Temperature:</label>
+                                <input type="range" class="form-range" v-model="temperature" id="temperature" 
+                                       min="0" max="2" step="0.1">
+                                <div class="text-muted text-end">{{ temperature }}</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="context" class="form-label">Context Length:</label>
+                                <input type="number" class="form-control" v-model="contextLength" id="context" min="0">
+                            </div>
+                            <div class="mb-3">
+                                <label for="topP" class="form-label">Top P:</label>
+                                <input type="range" class="form-range" v-model="topP" id="topP" 
+                                       min="0" max="1" step="0.1">
+                                <div class="text-muted text-end">{{ topP }}</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="topK" class="form-label">Top K:</label>
+                                <input type="number" class="form-control" v-model="topK" id="topK" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const { createApp } = Vue
+
+        // Add default server address
+        const DEFAULT_SERVER = 'http://127.0.0.1:11434'
+
+        // IndexedDB setup
+        const dbName = 'ollamaChat'
+        const dbVersion = 1
+
+        const initDB = () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, dbVersion)
+
+                request.onerror = () => reject(request.error)
+                request.onsuccess = () => resolve(request.result)
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result
+                    if (!db.objectStoreNames.contains('chats')) {
+                        const store = db.createObjectStore('chats', { keyPath: 'id', autoIncrement: true })
+                        store.createIndex('timestamp', 'timestamp')
+                    }
+                }
+            })
+        }
+
+        createApp({
+            data() {
+                return {
+                    userInput: '',
+                    messages: [],
+                    isTyping: false,
+                    error: null,
+                    availableModels: [],
+                    selectedModel: '',
+                    temperature: 0.7,
+                    contextLength: 4096,
+                    topP: 0.9,
+                    topK: 40,
+                    chatHistory: [],
+                    currentChatId: null,
+                    settingsModal: null,
+                    db: null,
+                    serverAddress: localStorage.getItem('ollamaServer') || DEFAULT_SERVER
+                }
+            },
+            computed: {
+                currentChatTitle() {
+                    const chat = this.chatHistory.find(c => c.id === this.currentChatId)
+                    return chat ? chat.title : 'New Chat'
+                }
+            },
+            methods: {
+                async initializeDB() {
+                    try {
+                        this.db = await initDB()
+                        await this.loadChatHistory()
+                    } catch (err) {
+                        console.error('Failed to initialize database:', err)
+                    }
+                },
+                async loadChatHistory() {
+                    return new Promise((resolve, reject) => {
+                        const transaction = this.db.transaction(['chats'], 'readonly')
+                        const store = transaction.objectStore('chats')
+                        const request = store.getAll()
+
+                        request.onsuccess = () => {
+                            this.chatHistory = request.result.sort((a, b) => b.timestamp - a.timestamp)
+                            resolve()
+                        }
+                        request.onerror = () => reject(request.error)
+                    })
+                },
+                async saveChat(chat) {
+                    return new Promise((resolve, reject) => {
+                        // Create a plain object copy of the chat
+                        const chatToSave = {
+                            id: chat.id,
+                            title: chat.title,
+                            timestamp: chat.timestamp,
+                            messages: JSON.parse(JSON.stringify(chat.messages)) // Deep clone the messages array
+                        }
+
+                        const transaction = this.db.transaction(['chats'], 'readwrite')
+                        const store = transaction.objectStore('chats')
+                        const request = store.put(chatToSave)
+
+                        request.onsuccess = () => resolve(request.result)
+                        request.onerror = () => reject(request.error)
+                    })
+                },
+                showSettings() {
+                    this.settingsModal.show()
+                },
+                async newChat() {
+                    const chat = {
+                        id: Date.now(),
+                        title: 'New Chat',
+                        messages: [],
+                        timestamp: Date.now()
+                    }
+                    const savedId = await this.saveChat(chat)
+                    await this.loadChatHistory()
+                    this.loadChat(chat)
+                },
+                async loadChat(chat) {
+                    this.currentChatId = chat.id
+                    this.messages = Array.isArray(chat.messages) ? [...chat.messages] : [] // Create a new array
+                },
+                async fetchModels() {
+                    try {
+                        const response = await fetch(`${this.serverAddress}/api/tags`)
+                        const data = await response.json()
+                        this.availableModels = data.models
+                        if (this.availableModels.length > 0) {
+                            this.selectedModel = this.availableModels[0].name
+                        }
+                    } catch (err) {
+                        this.error = 'Failed to fetch models. Make sure Ollama is running and the server address is correct.'
+                    }
+                },
+                async sendMessage() {
+                    if (!this.userInput.trim() || this.isTyping) return
+
+                    const userMessage = this.userInput.trim()
+                    this.messages.push({ role: 'user', content: userMessage })
+                    this.messages.push({ role: 'assistant', content: '' })
+                    this.userInput = ''
+                    this.isTyping = true
+                    this.error = null
+
+                    // Find current chat and update it
+                    const currentChat = this.chatHistory.find(c => c.id === this.currentChatId)
+                    if (currentChat) {
+                        // Update chat title if it's the first message
+                        if (this.messages.length === 2) {
+                            currentChat.title = userMessage.slice(0, 30) + (userMessage.length > 30 ? '...' : '')
+                        }
+                        
+                        try {
+                            const response = await fetch(`${this.serverAddress}/api/generate`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    model: this.selectedModel,
+                                    prompt: userMessage,
+                                    stream: true,
+                                    options: {
+                                        temperature: parseFloat(this.temperature),
+                                        num_ctx: parseInt(this.contextLength),
+                                        top_p: parseFloat(this.topP),
+                                        top_k: parseInt(this.topK)
+                                    }
+                                })
+                            })
+
+                            const reader = response.body.getReader()
+                            const decoder = new TextDecoder()
+
+                            while (true) {
+                                const { value, done } = await reader.read()
+                                if (done) break
+
+                                const chunk = decoder.decode(value)
+                                const lines = chunk.split('\n')
+
+                                for (const line of lines) {
+                                    if (line.trim() === '') continue
+                                    
+                                    try {
+                                        const data = JSON.parse(line)
+                                        if (data.response) {
+                                            this.messages[this.messages.length - 1].content += data.response
+                                            this.$nextTick(() => {
+                                                this.scrollToBottom()
+                                            })
+                                        }
+                                    } catch (e) {
+                                        console.error('Error parsing JSON:', e)
+                                    }
+                                }
+                            }
+
+                            // After message is complete, save the updated chat
+                            currentChat.messages = JSON.parse(JSON.stringify(this.messages))
+                            currentChat.timestamp = Date.now()
+                            await this.saveChat(currentChat)
+                            await this.loadChatHistory()
+                        } catch (err) {
+                            this.error = 'Failed to send message. Make sure Ollama is running.'
+                        } finally {
+                            this.isTyping = false
+                        }
+                    }
+                },
+                scrollToBottom() {
+                    const container = this.$refs.messagesContainer
+                    container.scrollTop = container.scrollHeight
+                },
+                formatMessage(content) {
+                    if (!content) return '';
+                    
+                    try {
+                        // Configure marked options
+                        marked.setOptions({
+                            breaks: true,  // Enable line breaks
+                            gfm: true,    // Enable GitHub Flavored Markdown
+                            sanitize: false, // Allow HTML
+                            smartLists: true,
+                            smartypants: true
+                        });
+
+                        // First handle think tags
+                        content = content.replace(/<think>([\s\S]*?)<\/think>/g, 
+                            (match, p1) => `<div class="think-block">${p1}</div>`);
+                        
+                        // Convert markdown to HTML
+                        content = marked.parse(content);
+                        
+                        return content;
+                    } catch (e) {
+                        console.error('Error formatting message:', e);
+                        return content.replace(/\n/g, '<br>'); // Fallback to simple line breaks
+                    }
+                },
+                async updateServerAddress(address) {
+                    this.serverAddress = address.trim()
+                    localStorage.setItem('ollamaServer', this.serverAddress)
+                    // Refresh models when server changes
+                    await this.fetchModels()
+                },
+                async deleteChat(chatId) {
+                    if (!confirm('Are you sure you want to delete this chat?')) return;
+
+                    try {
+                        const transaction = this.db.transaction(['chats'], 'readwrite')
+                        const store = transaction.objectStore('chats')
+                        await new Promise((resolve, reject) => {
+                            const request = store.delete(chatId)
+                            request.onsuccess = () => resolve()
+                            request.onerror = () => reject(request.error)
+                        })
+
+                        // Remove from chat history
+                        this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId)
+
+                        // If the deleted chat was the current chat, create a new one
+                        if (this.currentChatId === chatId) {
+                            this.messages = []
+                            await this.newChat()
+                        }
+                    } catch (err) {
+                        console.error('Failed to delete chat:', err)
+                        this.error = 'Failed to delete chat'
+                    }
+                }
+            },
+            async mounted() {
+                await this.initializeDB()
+                await this.fetchModels()
+                this.settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'))
+                await this.newChat()
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html> 
