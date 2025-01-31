@@ -293,6 +293,21 @@
         .markdown a:hover {
             text-decoration: underline;
         }
+        .btn-primary:disabled {
+            background-color: #404040;
+            border-color: #404040;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .bi-mic-fill {
+            color: #ff4444;
+            animation: pulse 1.5s infinite;
+        }
     </style>
 </head>
 <body>
@@ -352,9 +367,12 @@
                                 v-model="userInput" 
                                 @keyup.enter.exact="sendMessage"
                                 placeholder="Type your message here..."
-                                :disabled="isTyping"
+                                :disabled="isTyping || isListening"
                                 rows="1">
                             </textarea>
+                            <button class="btn btn-primary" @click="toggleVoiceInput" :disabled="isTyping">
+                                <i :class="['bi', isListening ? 'bi-mic-fill' : 'bi-mic']"></i>
+                            </button>
                             <button class="btn btn-primary" @click="sendMessage" :disabled="isTyping || !userInput.trim()">
                                 <i class="bi bi-send"></i>
                             </button>
@@ -473,7 +491,12 @@
                     currentChatId: null,
                     settingsModal: null,
                     db: null,
-                    serverAddress: localStorage.getItem('ollamaServer') || DEFAULT_SERVER
+                    serverAddress: localStorage.getItem('ollamaServer') || DEFAULT_SERVER,
+                    isListening: false,
+                    speechRecognition: null,
+                    speechSynthesis: window.speechSynthesis,
+                    isSpeaking: false,
+                    voiceEnabled: false
                 }
             },
             computed: {
@@ -552,6 +575,54 @@
                         this.error = 'Failed to fetch models. Make sure Ollama is running and the server address is correct.'
                     }
                 },
+                initSpeech() {
+                    if ('webkitSpeechRecognition' in window) {
+                        this.speechRecognition = new webkitSpeechRecognition();
+                        this.speechRecognition.continuous = false;
+                        this.speechRecognition.interimResults = false;
+                        this.speechRecognition.lang = 'en-US';
+
+                        this.speechRecognition.onresult = (event) => {
+                            const transcript = event.results[0][0].transcript;
+                            this.userInput = transcript;
+                            this.sendMessage();
+                        };
+
+                        this.speechRecognition.onend = () => {
+                            this.isListening = false;
+                        };
+
+                        this.voiceEnabled = true;
+                    }
+                },
+                toggleVoiceInput() {
+                    if (!this.isListening) {
+                        this.speechRecognition.start();
+                        this.isListening = true;
+                    } else {
+                        this.speechRecognition.stop();
+                        this.isListening = false;
+                    }
+                },
+                speakText(text) {
+                    if (this.isSpeaking) {
+                        this.speechSynthesis.cancel();
+                    }
+
+                    // Remove markdown and other formatting
+                    const cleanText = text.replace(/```[\s\S]*?```/g, 'code block omitted ')
+                                        .replace(/`.*?`/g, '')
+                                        .replace(/\[.*?\]\(.*?\)/g, '')
+                                        .replace(/<[^>]*>/g, '')
+                                        .replace(/\*/g, '');
+
+                    const utterance = new SpeechSynthesisUtterance(cleanText);
+                    utterance.onend = () => {
+                        this.isSpeaking = false;
+                    };
+                    this.isSpeaking = true;
+                    this.speechSynthesis.speak(utterance);
+                },
                 async sendMessage() {
                     if (!this.userInput.trim() || this.isTyping) return
 
@@ -621,6 +692,11 @@
                             currentChat.timestamp = Date.now()
                             await this.saveChat(currentChat)
                             await this.loadChatHistory()
+
+                            // After the message is complete, speak it
+                            if (this.voiceEnabled) {
+                                this.speakText(this.messages[this.messages.length - 1].content);
+                            }
                         } catch (err) {
                             this.error = 'Failed to send message. Make sure Ollama is running.'
                         } finally {
@@ -695,6 +771,7 @@
                 await this.fetchModels()
                 this.settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'))
                 await this.newChat()
+                this.initSpeech()
             }
         }).mount('#app')
     </script>
